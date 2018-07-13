@@ -50,7 +50,7 @@ kal_dirs <- file.path(base_dir,
 ## create a R matrix containing sample names and conditions from a text file
 s2c <- read.table(file.path(base_dir, "for_sleuth_meta.txt"), header = TRUE, stringsAsFactors=FALSE)
 s2c <- arrange(s2c, sname)
-
+colnames(s2c) <- c("sample","geno","tissue","path")
 ## add a column called "kal_dirs" containing paths to the data
 s2c <- mutate(s2c, path = kal_dirs)
 
@@ -68,12 +68,21 @@ t2g <- dplyr::rename(t2g, target_id = ensembl_transcript_id, ens_gene = ensembl_
 #####################
 
 so <- sleuth_prep(s2c, target_mapping = t2g, extra_bootstrap_summary = TRUE, aggregation_column = "ens_gene")
-plot_pca(so, color_by = 'geno', text_labels = TRUE)
-plot_pca(so, color_by = 'tissue', text_labels = FALSE)
+plot_pca(so, color_by = 'geno', pc_y = 3, text_labels = FALSE)
+plot_pca(so, color_by = 'tissue', pc_y = 3, text_labels = TRUE)
+
+sleuth_live(so)
 
 plot_loadings(so, pc_input=2)
-plot_bootstrap(so, 'ENSMUST00000082402.1', color_by = 'type')
-plot_bootstrap(so, 'ENSMUST00000042235.14', color_by = 'type')
+#plot_bootstrap(so, 'ENSMUST00000082402.1', color_by = 'type')
 
-plot_bootstrap(so, 'ENSMUST00000178282.2', color_by = 'type')
-plot_bootstrap(so, 'ENSMUST00000103410.2', color_by = 'type')
+plot_sample_heatmap(so)
+
+so <- sleuth_fit(so, ~geno + tissue, 'full')
+so <- sleuth_fit(so, ~tissue, 'no_tissue')
+
+so <- sleuth_lrt(so, 'no_tissue', 'full')
+so <- sleuth_wt(so, 'genowt')
+so <- sleuth_wt(so, 'tissuehip')
+tests(so)
+
