@@ -48,6 +48,11 @@ kal_dirs <- file.path(base_dir,
                         "hipp4_salmon", "hipp5_salmon","hipp6_salmon"))
 
 ## create a R matrix containing sample names and conditions from a text file
+
+## 'awt' = wt = wild type
+## sleuth puts the factor levels in alphabetical order and chooses the first as the reference
+## to keep the "WT" as the ref level we must put "a" in front of it 
+
 s2c <- read.table(file.path(base_dir, "for_sleuth_meta.txt"), header = TRUE, stringsAsFactors=FALSE)
 s2c <- arrange(s2c, sname)
 colnames(s2c) <- c("sample","geno","tissue","path")
@@ -86,3 +91,4 @@ so <- sleuth_wt(so, 'genowt')
 so <- sleuth_wt(so, 'tissuehip')
 tests(so)
 
+sleuth_live(so)
