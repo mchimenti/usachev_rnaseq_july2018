@@ -16,6 +16,8 @@
 #source("http://bioconductor.org/biocLite.R")
 #biocLite("COMBINE-lab/wasabi")       #install wasabi the first time
 
+devtools::install_github("pachterlab/sleuth")  #update sleuth 
+
 #pseudoalignment analysis
 
 library(sleuth)
@@ -27,11 +29,6 @@ library("AnnotationDbi")
 library("org.Hs.eg.db")
 #Exploratory analysis
 library(dplyr)
-
-#pathway
-library(pathview)
-library(gage)
-library(gageData)
 
 setwd("~/iihg/RNA_seq/usachev/project_usachev_zhihong_july2018/analysis/")
 
@@ -55,10 +52,10 @@ kal_dirs <- file.path(base_dir,
 
 s2c <- read.table(file.path(base_dir, "for_sleuth_meta.txt"), header = TRUE, stringsAsFactors=FALSE)
 s2c <- arrange(s2c, sname)
-colnames(s2c) <- c("sample","geno","tissue","path")
+
 ## add a column called "kal_dirs" containing paths to the data
 s2c <- mutate(s2c, path = kal_dirs)
-
+colnames(s2c) <- c("sample","geno","tissue","path")
 ## Get common gene names for transcripts
 
 ## this section queries Ensemble online database for gene names associated with transcript IDs
@@ -72,23 +69,53 @@ t2g <- dplyr::rename(t2g, target_id = ensembl_transcript_id, ens_gene = ensembl_
 ## KO vs. WT 
 #####################
 
-so <- sleuth_prep(s2c, target_mapping = t2g, extra_bootstrap_summary = TRUE, aggregation_column = "ens_gene")
-plot_pca(so, color_by = 'geno', pc_y = 3, text_labels = FALSE)
-plot_pca(so, color_by = 'tissue', pc_y = 3, text_labels = TRUE)
+#drop the hipp1 outlier 
+#s2c <- filter(s2c, sample != "hipp1")
 
-sleuth_live(so)
+so <- sleuth_prep(s2c, target_mapping = t2g, extra_bootstrap_summary = TRUE)
 
-plot_loadings(so, pc_input=2)
-#plot_bootstrap(so, 'ENSMUST00000082402.1', color_by = 'type')
-
+## QC plots
+plot_pca(so, color_by = 'geno', pc_y = 2, text_labels = FALSE)
+plot_pca(so, color_by = 'tissue', pc_y = 2, text_labels = TRUE)
 plot_sample_heatmap(so)
 
+## fit models 
 so <- sleuth_fit(so, ~geno + tissue, 'full')
 so <- sleuth_fit(so, ~tissue, 'no_tissue')
 
 so <- sleuth_lrt(so, 'no_tissue', 'full')
-so <- sleuth_wt(so, 'genowt')
+so <- sleuth_wt(so, 'genoko')
 so <- sleuth_wt(so, 'tissuehip')
 tests(so)
 
+## EDA 
 sleuth_live(so)
+
+## get results 
+so_tab_wt_geno <- sleuth_results(so, 'genoko')
+so_tab_lrt_geno <- sleuth_results(so, 'no_tissue:full', 'lrt', show_all=TRUE)
+
+## plotting by hand b/c the plotting function is broken ... arggh 
+
+transcripts <- head(so_tab_wt_geno, 10)$target_id
+
+tabd_df <- so$obs_norm[so$obs_norm$target_id %in% transcripts,]
+tabd_df <- dplyr::select(tabd_df, target_id, sample, tpm)
+tabd_df <- reshape2::dcast(tabd_df, target_id ~sample, value.var = 'tpm')
+
+rownames(tabd_df) <- tabd_df$target_id
+tabd_df$target_id <- NULL
+trans_mat <- as.matrix(log(tabd_df + 1))
+
+s2c <- so$sample_to_covariates
+rownames(s2c) <- s2c$sample
+annotation_cols = setdiff(colnames(so$sample_to_covariates), 'sample')
+s2c <- s2c[, annotation_cols, drop = FALSE]
+
+color_high = '#581845'
+color_mid = '#FFC300'
+color_low = '#DAF7A6'
+colors <- colorRampPalette(c(color_low, color_mid, color_high))(100)
+
+pheatmap::pheatmap(trans_mat, annotation_col = s2c, color = colors,
+                        cluster_cols = TRUE)
