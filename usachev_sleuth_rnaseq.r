@@ -30,7 +30,7 @@ library("org.Hs.eg.db")
 #Exploratory analysis
 library(dplyr)
 
-setwd("~/iihg/RNA_seq/usachev/project_usachev_zhihong_july2018/analysis/")
+setwd("~/iihg/RNA_seq/usachev/project_usachev_zhihong_july2018/")
 
 #########################
 ## kallisto > sleuth
@@ -112,10 +112,89 @@ rownames(s2c) <- s2c$sample
 annotation_cols = setdiff(colnames(so$sample_to_covariates), 'sample')
 s2c <- s2c[, annotation_cols, drop = FALSE]
 
-color_high = '#581845'
-color_mid = '#FFC300'
-color_low = '#DAF7A6'
+color_high = 'red' #581845'
+color_mid = 'white' #FFC300'
+color_low = 'blue' #DAF7A6'
 colors <- colorRampPalette(c(color_low, color_mid, color_high))(100)
 
+library(pheatmap)
+png('fullexp_wt_top_DE_geno.png', width = 1200, height = 1500, res = 150)
 pheatmap::pheatmap(trans_mat, annotation_col = s2c, color = colors,
                         cluster_cols = TRUE)
+dev.off()
+## 
+plot_volcano(so, 'genoko', test_type = 'wt', point_alpha = 1)
+plot_volcano(so, 'tissuehip', test_type = 'wt', point_alpha = 0.3)
+
+plot_ma(so, 'genoko', test_type = 'wt')
+plot_ma(so, 'tissuehip', test_type = 'wt')
+
+my_cols <- c("target_id", "ens_gene","ext_gene","qval","b","mean_obs")
+
+wt_geno_sig_genes <- so_tab_wt_geno[which(so_tab_wt_geno$qval < 0.1), my_cols]
+
+write.csv(x = wt_geno_sig_genes, file = "waldtest_genotype_DE_FDR_0p1.csv")
+write.csv(x = so_tab_wt_geno[my_cols], file = "waldtest_genotype_allgenes.csv")
+
+## single tissue comparisons (WT vs. KO)
+## Dr. Usachev asked for single tissue comparisons 
+
+
+s2c_hip <- s2c[s2c$tissue == 'hip',]
+
+so_hip <- sleuth_prep(s2c_hip, target_mapping = t2g, extra_bootstrap_summary = TRUE)
+
+## QC plots
+plot_pca(so_hip, color_by = 'geno', pc_y = 2, text_labels = FALSE)
+plot_pca(so_hip, color_by = 'tissue', pc_y = 2, text_labels = TRUE)
+plot_sample_heatmap(so_hip)
+
+## fit models 
+so_hip <- sleuth_fit(so_hip, ~geno, 'full')
+so_hip <- sleuth_fit(so_hip, ~ 1, 'intercept')
+
+so_hip <- sleuth_lrt(so_hip, 'intercept', 'full')
+so_hip <- sleuth_wt(so_hip, 'genoko')
+
+tests(so_hip)
+
+## EDA 
+sleuth_live(so_hip)
+## get results 
+hip_tab_wt_geno <- sleuth_results(so_hip, 'genoko')
+hip_tab_lrt_geno <- sleuth_results(so_hip, 'intercept:full', 'lrt', show_all=TRUE)
+
+my_cols <- c("target_id", "ens_gene","ext_gene","qval","b","mean_obs")
+hip_wt_geno_sig_genes <- hip_tab_wt_geno[which(hip_tab_wt_geno$qval < 0.1), my_cols]
+
+write.csv(x = hip_wt_geno_sig_genes, file = "waldtest_genotype_hiponly_DE_FDR_0p1.csv")
+
+#####
+
+s2c_cor <- s2c[s2c$tissue == 'cor', ]
+so_cor <- sleuth_prep(s2c_cor, target_mapping = t2g, extra_bootstrap_summary = TRUE)
+
+## QC plots
+plot_pca(so_cor, color_by = 'geno', pc_y = 2, text_labels = FALSE)
+plot_pca(so_cor, color_by = 'tissue', pc_y = 2, text_labels = TRUE)
+plot_sample_heatmap(so_cor)
+
+## fit models 
+so_cor <- sleuth_fit(so_cor, ~geno, 'full')
+so_cor <- sleuth_fit(so_cor, ~ 1, 'intercept')
+
+so_cor <- sleuth_lrt(so_cor, 'intercept', 'full')
+so_cor <- sleuth_wt(so_cor, 'genoko')
+
+tests(so_cor)
+
+sleuth_live(so_cor)
+
+cor_tab_wt_geno <- sleuth_results(so_cor, 'genoko')
+cor_tab_lrt_geno <- sleuth_results(so_cor, 'intercept:full', 'lrt', show_all=TRUE)
+
+my_cols <- c("target_id", "ens_gene","ext_gene","qval","b","mean_obs")
+cor_wt_geno_sig_genes <- cor_tab_wt_geno[which(cor_tab_wt_geno$qval < 0.1), my_cols]
+
+write.csv(x = cor_wt_geno_sig_genes, file = "waldtest_genotype_coronly_DE_FDR_0p1.csv")
+
